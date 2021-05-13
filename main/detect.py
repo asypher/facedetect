@@ -1,12 +1,21 @@
 import base64
 from io import BytesIO
-
+import numpy as np
 import cv2
 # import dlib
 import imutils
 import numpy as np
 from PIL import Image
 from imutils import face_utils
+import mediapipe as mp
+from .annotations import  *
+mp_drawing = mp.solutions.drawing_utils
+mp_face_mesh = mp.solutions.face_mesh
+
+
+facemesh = mp_face_mesh.FaceMesh(
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5)
 
 import os
 
@@ -44,9 +53,29 @@ def get_face_detect_data(data):
 
 
 
+drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 def detectImage(image):
-    image = imutils.resize(image, width=500)
-    image = cv2.circle(image, center_coordinates, radius, color, thickness) 
+    image = imutils.resize(image, width=300,height = 300)
+    # w,h,c = image.shape
+    # image = cv2.resize(image,(256,256))
+    results = facemesh.process(image)
+
+    if results.multi_face_landmarks:
+      for face_landmarks in results.multi_face_landmarks:
+        # print(face_landmarks)
+        mp_drawing.draw_landmarks(
+            image=image,
+            landmark_list=face_landmarks,
+            connections=mp_face_mesh.FACE_CONNECTIONS,
+            landmark_drawing_spec=drawing_spec,
+            connection_drawing_spec=drawing_spec)
+    
+    
+    # image = cv2.resize(image,(w,h))
+
+    # print(results, file=sys.stderr)
+    # image = cv2.circle(image, center_coordinates, radius, color, thickness) 
+
     # rects = detector(image, 1)
     # for (i, rect) in enumerate(rects):
     #     (x, y, w, h) = face_utils.rect_to_bb(rect)

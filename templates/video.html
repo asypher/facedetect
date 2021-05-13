@@ -16,6 +16,9 @@
                 </button>
                 <canvas id="detect-data" width="600" height="450"></canvas>
             </div>
+            <div class = 'videoprocessed'>
+                <img id="image" width="600" height="450">
+            </div>
         </div>
     </div>
 {% endblock %}
@@ -24,11 +27,20 @@
         var socket = new WebSocket('ws://localhost:5003/websocket');
         $(document).ready(function () {
             let video = document.getElementById('video');
-            let canvas = document.getElementById('canvas');
+            // let canvas = document.getElementById('canvas');
             let context = canvas.getContext('2d');
             let draw_canvas = document.getElementById('detect-data');
+            let imagedraw = document.getElementById('image');
             let draw_context = draw_canvas.getContext('2d');
             let image = new Image();
+
+            
+        // data = data.replace('data:' + type + ';base64,', ''); //split off junk 
+        // var video_element = document.getElementById("videoElement")
+        // var frame = capture(video_element, 1)
+        // var data = frame.toDataURL(type);
+        // socket.emit('image', data);
+
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({video: true}).then(function (stream) {
                     video.srcObject = stream;
@@ -37,8 +49,16 @@
             }
 
             function drawCanvas() {
+                var tt = "time draw canvas"
+                console.time(tt);
                 context.drawImage(video, 0, 0, 600, 450);
-                sendMessage(canvas.toDataURL('image/png',0.1));
+                
+                var ttt = "to data url"
+                console.time(ttt)
+                data = canvas.toDataURL('image/jpeg')
+                console.timeEnd(ttt)
+                sendMessage(data);
+                console.timeEnd(tt);
             }
 
             document.getElementById("start-stream").addEventListener("click", function () {
@@ -49,12 +69,35 @@
                 // console.log(message);
                 socket.send(message);
             }
+
+            // FPS = 30
+                    
+            // setInterval(() => {
+            //     socket.onmessage = function (e) {
+            //     var t = "on message"
+            //     console.time(t)
+            //     image.onload = function () {
+            //         draw_context.drawImage(image, 0, 0, 600, 450);
+
+            //     };
+            //     console.timeEnd(t)
+            //     image.src = e.data;
+            //     // drawCanvas();
+                
+            // };
+            // }, 1000/FPS);
+
             socket.onmessage = function (e) {
+                var t = "on message"
+                console.time(t)
                 image.onload = function () {
                     draw_context.drawImage(image, 0, 0, 600, 450);
+
                 };
+                console.timeEnd(t)
                 image.src = e.data;
                 drawCanvas();
+                
             };
         })
     </script>

@@ -10,7 +10,7 @@ import tornado.web
 import tornado.websocket
 from tornado.options import define, options
 from main.detect import get_face_detect_data
-
+import time
 
 define("port", default=5003, help="run on the given port", type=int)
 
@@ -25,8 +25,10 @@ class MainHandler(tornado.websocket.WebSocketHandler):
         logging.info("A client disconnected")
 
     def on_message(self, message):
+        s1 = time.time()
         image_data = get_face_detect_data(message)
-        # logging.info("image read")
+        s2 = time.time()
+        logging.info("python time == "+str((s2-s1)*1000))
         if not image_data:
             image_data = message
         self.write_message(image_data)
