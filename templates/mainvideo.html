@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block content %}
+    <div class="col s4">
+        <div class="collection">
+            <a href="{% url 'face-detect:image' %}" class="collection-item">Simple Face Detection</a>
+            <a href="{% url 'face-detect:live_video' %}" class="collection-item active">Live Face Detection</a>
+        </div>
+    </div>
+    <div class="col s6">
+        <div class="card">
+            <div class="card-content center-align">
+                <h4 class="center"><u>Live Video</u></h4>
+                <video id="video" width="500" height="400" autoplay></video>
+                <canvas id="canvas" width="500" height="400" class="hide"></canvas>
+                <button type="button" class="btn" id="start-stream" style="margin-bottom: 10px">Start Face Detection
+                </button>
+                <canvas id="detect-data" width="500" height="400"></canvas>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block js %}
+    <script type="text/javascript">
+        var socket = new WebSocket('ws://localhost:5003/websocket');
+        $(document).ready(function () {
+            let video = document.getElementById('video');
+            // let canvas = document.getElementById('canvas');
+            let context = canvas.getContext('2d');
+            let draw_canvas = document.getElementById('detect-data');
+            let imagedraw = document.getElementById('image');
+            let draw_context = draw_canvas.getContext('2d');
+            let image = new Image();
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({video: true}).then(function (stream) {
+                    video.srcObject = stream;
+                    video.play();
+                });
+            }
+
+            function drawCanvas() {
+                var tt = "time draw canvas"
+                console.time(tt);
+                context.drawImage(video, 0, 0, 500, 400);
+                
+                var ttt = "to data url"
+                console.time(ttt)
+                data = canvas.toDataURL('image/jpeg')
+                console.timeEnd(ttt)
+                sendMessage(data);
+                console.timeEnd(tt);
+            }
+
+            document.getElementById("start-stream").addEventListener("click", function () {
+                drawCanvas();
+            });
+
+            function sendMessage(message) {
+                // console.log(message);
+                socket.send(message);
+            }
+
+            socket.onmessage = function (e) {
+                var t = "on message"
+                console.time(t)
+                image.onload = function () {
+                    draw_context.drawImage(image, 0, 0, 500, 400);
+
+                };
+                console.timeEnd(t)
+                image.src = e.data;
+                drawCanvas();
+                
+            };
+        })
+    </script>
+{% endblock %}

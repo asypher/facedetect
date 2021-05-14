@@ -1,104 +1,154 @@
-{% extends 'base.html' %}
-{% block content %}
-    <div class="col s4">
-        <div class="collection">
-            <a href="{% url 'face-detect:image' %}" class="collection-item">Simple Face Detection</a>
-            <a href="{% url 'face-detect:live_video' %}" class="collection-item active">Live Face Detection</a>
-        </div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.117.1/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh@0.0.3"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@2.0.0/dist/tf-backend-wasm.js"></script> -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@2.0.0-rc.4/dist/tf-backend-webgl.es2017.js"></script>
+<script src="triangulation.js"></script>
+</head>
+<body>
+  <div id="main">
+    <div class="container">
+      <div class="canvas-wrapper">
+        <canvas id="output"></canvas>
+        <video id="video" playsinline style="
+          -webkit-transform: scaleX(-1);
+          transform: scaleX(-1);
+          visibility: hidden;
+          width: auto;
+          height: auto;
+          ">
+        </video>
+      </div>
     </div>
-    <div class="col s6">
-        <div class="card">
-            <div class="card-content center-align">
-                <h4 class="center"><u>Live Video</u></h4>
-                <video id="video" width="600" height="450" autoplay></video>
-                <canvas id="canvas" width="600" height="450" class="hide"></canvas>
-                <button type="button" class="btn" id="start-stream" style="margin-bottom: 10px">Start Face Detection
-                </button>
-                <canvas id="detect-data" width="600" height="450"></canvas>
-            </div>
-            <div class = 'videoprocessed'>
-                <img id="image" width="600" height="450">
-            </div>
-        </div>
-    </div>
-{% endblock %}
-{% block js %}
-    <script type="text/javascript">
-        var socket = new WebSocket('ws://localhost:5003/websocket');
-        $(document).ready(function () {
-            let video = document.getElementById('video');
-            // let canvas = document.getElementById('canvas');
-            let context = canvas.getContext('2d');
-            let draw_canvas = document.getElementById('detect-data');
-            let imagedraw = document.getElementById('image');
-            let draw_context = draw_canvas.getContext('2d');
-            let image = new Image();
+  </div>
+    <div id="myDiv01">...</div>   
+</body>
+<script>
 
-            
-        // data = data.replace('data:' + type + ';base64,', ''); //split off junk 
-        // var video_element = document.getElementById("videoElement")
-        // var frame = capture(video_element, 1)
-        // var data = frame.toDataURL(type);
-        // socket.emit('image', data);
+function isMobile() {
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return isAndroid || isiOS;
+}
 
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({video: true}).then(function (stream) {
-                    video.srcObject = stream;
-                    video.play();
-                });
-            }
+function drawPath(ctx, points, closePath) {
+  const region = new Path2D();
+  region.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) {
+    const point = points[i];
+    region.lineTo(point[0], point[1]);
+  }
 
-            function drawCanvas() {
-                var tt = "time draw canvas"
-                console.time(tt);
-                context.drawImage(video, 0, 0, 600, 450);
-                
-                var ttt = "to data url"
-                console.time(ttt)
-                data = canvas.toDataURL('image/jpeg')
-                console.timeEnd(ttt)
-                sendMessage(data);
-                console.timeEnd(tt);
-            }
+  if (closePath) {
+    region.closePath();
+  }
+  ctx.stroke(region);
+}
 
-            document.getElementById("start-stream").addEventListener("click", function () {
-                drawCanvas();
-            });
+let model, ctx, videoWidth, videoHeight, video, canvas;
 
-            function sendMessage(message) {
-                // console.log(message);
-                socket.send(message);
-            }
+const VIDEO_SIZE = 400;
+const mobile = isMobile();
+const state = {
+  backend: 'webgl',
+  maxFaces: 10,
+  triangulateMesh: false
+};
 
-            // FPS = 30
-                    
-            // setInterval(() => {
-            //     socket.onmessage = function (e) {
-            //     var t = "on message"
-            //     console.time(t)
-            //     image.onload = function () {
-            //         draw_context.drawImage(image, 0, 0, 600, 450);
+async function setupCamera() {
+  video = document.getElementById('video');
 
-            //     };
-            //     console.timeEnd(t)
-            //     image.src = e.data;
-            //     // drawCanvas();
-                
-            // };
-            // }, 1000/FPS);
+  const stream = await navigator.mediaDevices.getUserMedia({
+    'audio': false,
+    'video': {
+      facingMode: 'user',
+      width: mobile ? undefined : VIDEO_SIZE,
+      height: mobile ? undefined : VIDEO_SIZE
+    },
+  });
+  video.srcObject = stream;
 
-            socket.onmessage = function (e) {
-                var t = "on message"
-                console.time(t)
-                image.onload = function () {
-                    draw_context.drawImage(image, 0, 0, 600, 450);
+  return new Promise((resolve) => {
+    video.onloadedmetadata = () => {
+      resolve(video);
+    };
+  });
+}
 
-                };
-                console.timeEnd(t)
-                image.src = e.data;
-                drawCanvas();
-                
-            };
-        })
-    </script>
-{% endblock %}
+
+
+const triangulateMesh = false;
+
+async function renderPrediction() {
+ 
+    var rendertime = "each render";
+    console.time(rendertime);
+  const predictions = await model.estimateFaces(video);
+  ctx.drawImage(
+      video, 0, 0, videoWidth, videoHeight, 0, 0, canvas.width, canvas.height);
+
+  document.getElementById('myDiv01').innerHTML = '' 
+  if (predictions.length > 0) {
+    predictions.forEach(prediction => {
+      try {
+        document.getElementById('myDiv01').innerHTML += 'Confidence: ' + prediction.faceInViewConfidence.toFixed(4) + '<br>'
+      }
+      catch(err){
+      document.getElementById('myDiv01').innerHTML = err.message;
+      }
+        
+      const keypoints = prediction.scaledMesh;
+      if (triangulateMesh) {
+        for (let i = 0; i < TRIANGULATION.length / 3; i++) {
+          const points = [
+            TRIANGULATION[i * 3], TRIANGULATION[i * 3 + 1],
+            TRIANGULATION[i * 3 + 2]
+          ].map(index => keypoints[index]);
+
+          drawPath(ctx, points, true);
+        }
+      } else {
+        for (let i = 0; i < keypoints.length; i++) {
+          const x = keypoints[i][0];
+          const y = keypoints[i][1];
+
+          ctx.beginPath();
+          ctx.arc(x, y, 1 /* radius */, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+    });
+  }
+  requestAnimationFrame(renderPrediction);
+  console.timeEnd(rendertime);
+};
+
+async function main() {
+  await tf.setBackend(state.backend);
+  await setupCamera();
+  video.play();
+  videoWidth = video.videoWidth;
+  videoHeight = video.videoHeight;
+  video.width = videoWidth;
+  video.height = videoHeight;
+
+  canvas = document.getElementById('output');
+  canvas.width = videoWidth;
+  canvas.height = videoHeight;
+  const canvasContainer = document.querySelector('.canvas-wrapper');
+  canvasContainer.style = `width: ${videoWidth}px; height: ${videoHeight}px`;
+
+  ctx = canvas.getContext('2d');
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.fillStyle = '#32EEDB';
+  ctx.strokeStyle = '#32EEDB';
+  ctx.lineWidth = 0.5;
+
+  model = await facemesh.load({maxFaces: 1 ,detectionConfidence : 0.7});
+  renderPrediction();
+};
+
+main();
+      
+</script>
